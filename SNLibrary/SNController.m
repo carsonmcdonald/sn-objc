@@ -110,6 +110,7 @@
                     SNDevice *device = [[SNDevice alloc] init];
                     device.ipAddr = [NSString stringWithFormat:@"%s", inet_ntoa(clientAddr.sin_addr)];
                     device.descriptionURL = [NSURL URLWithString:descriptionLocation];
+                    device.baseURL = [NSURL URLWithString:[NSString stringWithFormat:@"%@://%@:%@/", device.descriptionURL.scheme, device.descriptionURL.host, device.descriptionURL.port]];
                     deviceRegistrationBlock(device);
                 }
             }
