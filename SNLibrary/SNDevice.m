@@ -2,7 +2,7 @@
 
 @implementation SNDevice
 
--(NSString *)description
+- (NSString *)description
 {
     return [NSString stringWithFormat:@"Device: ip=%@, descriptionURL=%@, baseURL=%@", _ipAddr, _descriptionURL, _baseURL];
 }
