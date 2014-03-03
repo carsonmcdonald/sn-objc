@@ -1,6 +1,8 @@
 #import <Foundation/Foundation.h>
 
-@interface SNDeviceDetail : NSObject
+#import "SNResponse.h"
+
+@interface SNDeviceDetail : SNResponse
 
 @property (strong, nonatomic) NSString *deviceType;
 @property (strong, nonatomic) NSString *friendlyName;

@@ -1,6 +1,8 @@
 #import <Foundation/Foundation.h>
 
-@interface SNService : NSObject
+#import "SNResponse.h"
+
+@interface SNService : SNResponse
 
 @property (strong, nonatomic) NSString *serviceType;
 @property (strong, nonatomic) NSString *serviceId;
