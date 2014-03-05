@@ -4,7 +4,8 @@
 
 enum SNResponseType {
     DeviceDetail,
-    Service
+    Service,
+    ServiceSpec
 };
 
 @property (assign, nonatomic) enum SNResponseType responseType;

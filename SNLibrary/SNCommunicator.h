@@ -14,5 +14,6 @@ typedef void (^ResponseErrorBlock)(NSError *error);
 @property (copy, nonatomic) ResponseErrorBlock errorBlock;
 
 - (void)requestDeviceInformation:(SNDevice *)device;
+- (void)requestServiceSpecInformation:(SNDevice *)device withSCPDURL:(NSString *)SCPDURL;
 
 @end

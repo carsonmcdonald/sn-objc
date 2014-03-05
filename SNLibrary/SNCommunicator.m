@@ -2,6 +2,7 @@
 
 #import "SNDeviceDetail.h"
 #import "SNService.h"
+#import "SNServiceSpec.h"
 
 #import <libxml/parser.h>
 #import <libxml/tree.h>
@@ -15,16 +16,25 @@
 @end
 
 @implementation SNCommunicator
+{
+    NSURLSession *session;
+}
+
+- (id)init
+{
+    if ( self = [super init] )
+    {
+        NSURLSessionConfiguration *sessionConfig = [NSURLSessionConfiguration defaultSessionConfiguration];
+        session = [NSURLSession sessionWithConfiguration:sessionConfig
+                                                delegate:nil
+                                           delegateQueue:nil];
+    }
+    return self;
+}
 
 - (void)requestDeviceInformation:(SNDevice *)device
 {
     NSURL *deviceURL = [NSURL URLWithString:@"/xml/device_description.xml" relativeToURL:device.baseURL];
-    
-    NSURLSessionConfiguration *sessionConfig = [NSURLSessionConfiguration defaultSessionConfiguration];
-    
-    NSURLSession *session = [NSURLSession sessionWithConfiguration:sessionConfig
-                                                          delegate:nil
-                                                     delegateQueue:nil];
     
     NSURLSessionDataTask *requestTask = [session dataTaskWithURL:deviceURL
                                                completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
@@ -41,19 +51,22 @@
                                                        NSString *responseValue = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
                                                        
                                                        SNDeviceDetail *deviceDetail = [[SNDeviceDetail alloc] init];
-                                                       [self convertXML:responseValue toObject:deviceDetail usingXPathToProperties:@{@"//gns:root/gns:device/gns:friendlyName/text()": @"friendlyName",
-                                                                                                                                     @"//gns:root/gns:device/gns:modelName/text()": @"modelName",
-                                                                                                                                     @"//gns:root/gns:device/gns:serialNum/text()": @"serialNum",
-                                                                                                                                     @"//gns:root/gns:device/gns:roomName/text()": @"roomName",
-                                                                                                                                     @"//gns:root/gns:device/gns:deviceType/text()": @"deviceType",
-                                                                                                                                     @"//gns:root/gns:device/gns:modelNumber/text()": @"modelNumber",
-                                                                                                                                     @"//gns:root/gns:device/gns:modelDescription/text()": @"modelDescription",
-                                                                                                                                     @"//gns:root/gns:device/gns:softwareVersion/text()": @"softwareVersion",
-                                                                                                                                     @"//gns:root/gns:device/gns:hardwareVersion/text()": @"hardwareVersion",
-                                                                                                                                     @"//gns:root/gns:device/gns:UDN/text()": @"UDN",
-                                                                                                                                     @"//gns:root/gns:device/gns:displayName/text()": @"displayName",
-                                                                                                                                     @"//gns:root/gns:device/gns:serviceList/gns:service": @{@"type": [NSArray class], @"name": @"services"},
-                                                                                                                                     @"//gns:root/gns:device/gns:iconList/gns:icon/gns:url/text()": @{@"type": [NSArray class], @"name": @"iconURLList"}}];
+                                                       [self convertXML:responseValue
+                                                               toObject:deviceDetail
+                                                 usingXPathToProperties:@{@"//gns:root/gns:device/gns:friendlyName/text()": @"friendlyName",
+                                                                          @"//gns:root/gns:device/gns:modelName/text()": @"modelName",
+                                                                          @"//gns:root/gns:device/gns:serialNum/text()": @"serialNum",
+                                                                          @"//gns:root/gns:device/gns:roomName/text()": @"roomName",
+                                                                          @"//gns:root/gns:device/gns:deviceType/text()": @"deviceType",
+                                                                          @"//gns:root/gns:device/gns:modelNumber/text()": @"modelNumber",
+                                                                          @"//gns:root/gns:device/gns:modelDescription/text()": @"modelDescription",
+                                                                          @"//gns:root/gns:device/gns:softwareVersion/text()": @"softwareVersion",
+                                                                          @"//gns:root/gns:device/gns:hardwareVersion/text()": @"hardwareVersion",
+                                                                          @"//gns:root/gns:device/gns:UDN/text()": @"UDN",
+                                                                          @"//gns:root/gns:device/gns:displayName/text()": @"displayName",
+                                                                          @"//gns:root/gns:device/gns:serviceList/gns:service": @{@"type": [NSArray class], @"name": @"services"},
+                                                                          @"//gns:root/gns:device/gns:iconList/gns:icon/gns:url/text()": @{@"type": [NSArray class], @"name": @"iconURLList"}}
+                                                        withCurrentRoot:nil];
                                                        
                                                        if(_successBlock)
                                                        {
@@ -66,7 +79,43 @@
     [requestTask resume];
 }
 
-- (void)convertXML:(NSString *)xmlData toObject:(NSObject *)obj usingXPathToProperties:(NSDictionary *)xpathToProp
+- (void)requestServiceSpecInformation:(SNDevice *)device withSCPDURL:(NSString *)SCPDURL
+{
+    NSURL *deviceURL = [NSURL URLWithString:SCPDURL relativeToURL:device.baseURL];
+    
+    NSURLSessionDataTask *requestTask = [session dataTaskWithURL:deviceURL
+                                               completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+                                                   
+                                                   if(error)
+                                                   {
+                                                       if(_errorBlock)
+                                                       {
+                                                           _errorBlock(error);
+                                                       }
+                                                   }
+                                                   else
+                                                   {
+                                                       NSString *responseValue = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+                                                       
+                                                       
+                                                       SNServiceSpec *spec = [[SNServiceSpec alloc] init];
+                                                       [self convertXML:responseValue
+                                                               toObject:spec
+                                                 usingXPathToProperties:@{@"//gns:scpd/gns:serviceStateTable/gns:stateVariable": @{@"type": [NSDictionary class], @"name": @"stateTable"},
+                                                                          @"//gns:scpd/gns:actionList/gns:action": @{@"type": [NSDictionary class], @"name": @"actionTable"}}
+                                                        withCurrentRoot:nil];
+                                                      
+                                                       if(_successBlock)
+                                                       {
+                                                           _successBlock(spec);
+                                                       }
+                                                   }
+                                               }];
+    
+    [requestTask resume];
+}
+
+- (void)convertXML:(NSString *)xmlData toObject:(NSObject *)obj usingXPathToProperties:(NSDictionary *)xpathToProp withCurrentRoot:(NSString *)xpathRoot
 {
     xmlDocPtr doc = xmlReadMemory([xmlData UTF8String], (int)xmlData.length, NULL, NULL, 0);
     
@@ -161,13 +210,64 @@
                             if([xpath isEqualToString:@"//gns:root/gns:device/gns:serviceList/gns:service"])
                             {
                                 SNService *service = [[SNService alloc] init];
-                                [self convertXML:xmlData toObject:service usingXPathToProperties:@{[NSString stringWithFormat:@"//gns:root/gns:device/gns:serviceList/gns:service[%d]/gns:serviceType/text()", i+1]: @"serviceType",
-                                                                                                   [NSString stringWithFormat:@"//gns:root/gns:device/gns:serviceList/gns:service[%d]/gns:serviceId/text()", i+1]: @"serviceId",
-                                                                                                   [NSString stringWithFormat:@"//gns:root/gns:device/gns:serviceList/gns:service[%d]/gns:controlURL/text()", i+1]: @"controlURL",
-                                                                                                   [NSString stringWithFormat:@"//gns:root/gns:device/gns:serviceList/gns:service[%d]/gns:eventSubURL/text()", i+1]: @"eventSubURL",
-                                                                                                   [NSString stringWithFormat:@"//gns:root/gns:device/gns:serviceList/gns:service[%d]/gns:SCPDURL/text()", i+1]: @"SCPDURL"}];
+                                [self convertXML:xmlData
+                                        toObject:service
+                          usingXPathToProperties:@{[NSString stringWithFormat:@"//gns:root/gns:device/gns:serviceList/gns:service[%d]/gns:serviceType/text()", i+1]: @"serviceType",
+                                                   [NSString stringWithFormat:@"//gns:root/gns:device/gns:serviceList/gns:service[%d]/gns:serviceId/text()", i+1]: @"serviceId",
+                                                   [NSString stringWithFormat:@"//gns:root/gns:device/gns:serviceList/gns:service[%d]/gns:controlURL/text()", i+1]: @"controlURL",
+                                                   [NSString stringWithFormat:@"//gns:root/gns:device/gns:serviceList/gns:service[%d]/gns:eventSubURL/text()", i+1]: @"eventSubURL",
+                                                   [NSString stringWithFormat:@"//gns:root/gns:device/gns:serviceList/gns:service[%d]/gns:SCPDURL/text()", i+1]: @"SCPDURL"}
+                                 withCurrentRoot:nil];
                                 [propValue addObject:service];
                             }
+                        }
+                    }
+                    [obj setValue:propValue forKey:propName];
+                }
+                else if([prop[@"type"] isEqualTo:[NSDictionary class]])
+                {
+                    NSMutableDictionary *propValue = [[NSMutableDictionary alloc] init];
+                    for(int i=0; i<xpathObj->nodesetval->nodeNr; i++)
+                    {
+                        if([xpath isEqualToString:@"//gns:scpd/gns:serviceStateTable/gns:stateVariable"])
+                        {
+                            // todo handle allowedValueList and allowedValueRange
+                            
+                            SNServiceSpecVariable *variable = [[SNServiceSpecVariable alloc] init];
+                            [self convertXML:xmlData
+                                    toObject:variable
+                      usingXPathToProperties:@{[NSString stringWithFormat:@"//gns:scpd/gns:serviceStateTable/gns:stateVariable[%d]/gns:name/text()", i+1]: @"name",
+                                               [NSString stringWithFormat:@"//gns:scpd/gns:serviceStateTable/gns:stateVariable[%d]/gns:dataType/text()", i+1]: @"dataType"}
+                             withCurrentRoot:nil];
+                            
+                            propValue[variable.name] = variable;
+                        }
+                        else if([xpath isEqualToString:@"//gns:scpd/gns:actionList/gns:action"])
+                        {
+                            SNServiceSpecAction *action = [[SNServiceSpecAction alloc] init];
+                            [self convertXML:xmlData
+                                    toObject:action
+                      usingXPathToProperties:@{[NSString stringWithFormat:@"//gns:scpd/gns:actionList/gns:action[%d]/gns:name/text()", i+1]: @"name",
+                                               [NSString stringWithFormat:@"//gns:scpd/gns:actionList/gns:action[%d]/gns:argumentList/gns:argument", i+1]: @{@"type": [NSDictionary class], @"name": @"argumentList"}}
+                             withCurrentRoot:[NSString stringWithFormat:@"//gns:scpd/gns:actionList/gns:action[%d]/gns:argumentList/gns:argument", i+1]];
+                            
+                            propValue[action.name] = action;
+                        }
+                        else if([xpath rangeOfString:@"//gns:scpd/gns:actionList/gns:action\\[\\d+]/gns:argumentList/gns:argument" options:NSRegularExpressionSearch|NSCaseInsensitiveSearch].location != NSNotFound)
+                        {                            
+                            SNServiceSpecActionArgument *argument = [[SNServiceSpecActionArgument alloc] init];
+                            [self convertXML:xmlData
+                                    toObject:argument
+                      usingXPathToProperties:@{[NSString stringWithFormat:@"%@[%d]/gns:name/text()", xpathRoot, i+1]: @"name",
+                                               [NSString stringWithFormat:@"%@[%d]/gns:direction/text()", xpathRoot, i+1]: @"direction",
+                                               [NSString stringWithFormat:@"%@[%d]/gns:relatedStateVariable/text()", xpathRoot, i+1]: @"relatedStateVariable"}
+                             withCurrentRoot:nil];
+                            
+                            propValue[argument.name] = argument;
+                        }
+                        else
+                        {
+                            NSLog(@"Missed: %@", xpath);
                         }
                     }
                     [obj setValue:propValue forKey:propName];

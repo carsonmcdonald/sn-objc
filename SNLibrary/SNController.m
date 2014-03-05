@@ -16,9 +16,9 @@
     int deviceMonitorSocket;
 }
 
--(id)init
+- (id)init
 {
-    if ( self = [super init] )
+    if(self = [super init])
     {
         deviceListenQueue = dispatch_queue_create("sn.device.listen.queue", 0);
         deviceMonitorEnabled = YES;
@@ -38,7 +38,7 @@
     deviceMonitorEnabled = YES;
     
     deviceMonitorSocket = socket(AF_INET, SOCK_DGRAM, 0);
-    if (deviceMonitorSocket < 0)
+    if(deviceMonitorSocket < 0)
     {
         if(error)
         {
