@@ -3,6 +3,7 @@
 #import "SNDeviceDetail.h"
 #import "SNService.h"
 #import "SNServiceSpec.h"
+#import "SNServiceActionResponse.h"
 
 #import <libxml/parser.h>
 #import <libxml/tree.h>
@@ -11,6 +12,7 @@
 
 @interface SNCommunicator(Private)
 
+- (SNResponse *)convertXML:(NSString *)xmlData withAction:(SNServiceSpecAction *)serviceAction withActionURN:(NSString *)actionURN;
 - (void)convertXML:(NSString *)xmlData toObject:(NSObject *)obj usingXPathToProperties:(NSDictionary *)xpathToProp;
 
 @end
@@ -97,7 +99,6 @@
                                                    {
                                                        NSString *responseValue = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
                                                        
-                                                       
                                                        SNServiceSpec *spec = [[SNServiceSpec alloc] init];
                                                        [self convertXML:responseValue
                                                                toObject:spec
@@ -113,6 +114,159 @@
                                                }];
     
     [requestTask resume];
+}
+
+- (void)requestServiceAction:(SNDevice *)device withService:(SNService *)service withActionSpec:(SNServiceSpecAction *)specAction withParameters:(NSDictionary *)paramters
+{
+    NSURL *deviceURL = [NSURL URLWithString:service.controlURL relativeToURL:device.baseURL];
+    
+    NSMutableString *postRequest = [[NSMutableString alloc] init];
+    [postRequest appendString:@"<?xml version=\"1.0\" encoding=\"utf-8\"?>"];
+    [postRequest appendString:@"<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">"];
+    [postRequest appendString:@"<s:Body>"];
+    [postRequest appendString:[NSString stringWithFormat:@"<b:%@ xmlns:b=\"%@\">", specAction.name, service.serviceType]];
+    // todo set input params here
+    [postRequest appendString:[NSString stringWithFormat:@"</b:%@>", specAction.name]];
+    [postRequest appendString:@"</s:Body>"];
+    [postRequest appendString:@"</s:Envelope>"];
+    
+    NSMutableURLRequest *postURLRequest = [NSMutableURLRequest requestWithURL:deviceURL];
+    [postURLRequest setHTTPMethod:@"POST"];
+    [postURLRequest setValue:[NSString stringWithFormat:@"%@#%@", service.serviceType, specAction.name] forHTTPHeaderField:@"SOAPAction"];
+    [postURLRequest setValue:@"text/xml; charset=utf8" forHTTPHeaderField:@"Content-type"];
+    [postURLRequest setHTTPBody:[postRequest dataUsingEncoding:NSUTF8StringEncoding]];
+    
+    NSURLSessionDataTask *requestTask = [session dataTaskWithRequest:postURLRequest
+                                               completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+                                                   
+                                                   if(error)
+                                                   {
+                                                       if(_errorBlock)
+                                                       {
+                                                           _errorBlock(error);
+                                                       }
+                                                   }
+                                                   else
+                                                   {
+                                                       NSString *responseValue = [NSString stringWithFormat:@"%@\n", [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] ];
+
+                                                       if(_successBlock)
+                                                       {
+                                                           _successBlock([self convertXML:responseValue withAction:specAction withActionURN:service.serviceType]);
+                                                       }
+                                                   }
+                                                   
+                                               }];
+    [requestTask resume];
+}
+
+- (SNResponse *)convertXML:(NSString *)xmlData withAction:(SNServiceSpecAction *)serviceAction withActionURN:(NSString *)actionURN
+{
+    xmlDocPtr doc = xmlReadMemory([xmlData UTF8String], (int)xmlData.length, NULL, NULL, 0);
+    
+    if (doc == NULL)
+    {
+        if(_errorBlock)
+        {
+            _errorBlock([NSError errorWithDomain:SNCommunicatorDomain
+                                            code:-100
+                                        userInfo:@{NSLocalizedDescriptionKey: NSLocalizedString(@"Failed to parse response document.", nil)}]);
+        }
+        return nil;
+    }
+    
+    xmlNodePtr rootNode = xmlDocGetRootElement(doc);
+    if(rootNode == NULL)
+    {
+        xmlFreeDoc(doc);
+        if(_errorBlock)
+        {
+            _errorBlock([NSError errorWithDomain:SNCommunicatorDomain
+                                            code:-101
+                                        userInfo:@{NSLocalizedDescriptionKey: NSLocalizedString(@"Failed to parse response document, unable to find root node.", nil)}]);
+        }
+        return nil;
+    }
+    
+    xmlXPathContextPtr xpathCtx = xmlXPathNewContext(doc);
+    if(xpathCtx == NULL)
+    {
+        xmlFreeDoc(doc);
+        if(_errorBlock)
+        {
+            _errorBlock([NSError errorWithDomain:SNCommunicatorDomain
+                                            code:-102
+                                        userInfo:@{NSLocalizedDescriptionKey: NSLocalizedString(@"Failed to parse response document, unable to create new xpath context.", nil)}]);
+        }
+        return nil;
+    }
+    
+    if(xmlXPathRegisterNs(xpathCtx, rootNode->ns->prefix == NULL ? (BAD_CAST "s") : rootNode->ns->prefix, rootNode->ns->href) != 0)
+    {
+        xmlXPathFreeContext(xpathCtx);
+        xmlFreeDoc(doc);
+        if(_errorBlock)
+        {
+            _errorBlock([NSError errorWithDomain:SNCommunicatorDomain
+                                            code:-103
+                                        userInfo:@{NSLocalizedDescriptionKey: NSLocalizedString(@"Failed to parse response document, unable to register namespace", nil)}]);
+        }
+        return nil;
+    }
+    
+    if(xmlXPathRegisterNs(xpathCtx, (BAD_CAST "u"), (BAD_CAST [actionURN UTF8String])) != 0)
+    {
+        xmlXPathFreeContext(xpathCtx);
+        xmlFreeDoc(doc);
+        if(_errorBlock)
+        {
+            _errorBlock([NSError errorWithDomain:SNCommunicatorDomain
+                                            code:-103
+                                        userInfo:@{NSLocalizedDescriptionKey: NSLocalizedString(@"Failed to parse response document, unable to register namespace", nil)}]);
+        }
+        return nil;
+    }
+    
+    NSMutableDictionary *values = [[NSMutableDictionary alloc] init];
+    
+    [serviceAction.argumentList enumerateKeysAndObjectsUsingBlock:^(NSString *name, SNServiceSpecActionArgument *actionArg, BOOL *stop) {
+        
+        if([actionArg.direction isEqualToString:@"out"])
+        {
+            NSString *xpath = [NSString stringWithFormat:@"//s:Envelope/s:Body/u:%@Response/%@/text()", serviceAction.name, actionArg.name];
+            
+            const xmlChar* xpathExpr = BAD_CAST [xpath UTF8String];
+            
+            xmlXPathObjectPtr xpathObj = xmlXPathEvalExpression(xpathExpr, xpathCtx);
+            if(xpathObj == NULL)
+            {
+                xmlXPathFreeContext(xpathCtx);
+                xmlFreeDoc(doc);
+                if(_errorBlock)
+                {
+                    _errorBlock([NSError errorWithDomain:SNCommunicatorDomain
+                                                    code:-104
+                                                userInfo:@{NSLocalizedDescriptionKey: NSLocalizedString(@"Failed to parse response document, unable to evaluate xpath expression %s", xpathExpr)}]);
+                }
+                *stop = YES;
+            }
+            
+            if(!*stop)
+            {
+                if(xpathObj->nodesetval != NULL && xpathObj->nodesetval->nodeNr > 0)
+                {
+                    // todo use for correct parsing actionArg.relatedStateVariable
+                    values[actionArg.name] = [NSString stringWithFormat:@"%s", xpathObj->nodesetval->nodeTab[0]->content];
+                }
+            }
+        }
+        
+    }];
+    
+    SNServiceActionResponse *response = [[SNServiceActionResponse alloc] init];
+    response.responseType = ServiceActionResponse;
+    response.responseValues = values;
+    return response;
 }
 
 - (void)convertXML:(NSString *)xmlData toObject:(NSObject *)obj usingXPathToProperties:(NSDictionary *)xpathToProp withCurrentRoot:(NSString *)xpathRoot
