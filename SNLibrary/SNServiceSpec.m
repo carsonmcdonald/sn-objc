@@ -20,6 +20,32 @@
 
 @implementation SNServiceSpecAction
 
+- (BOOL)hasInParameters
+{
+    __block BOOL hasInParam = NO;
+    [_argumentList enumerateKeysAndObjectsUsingBlock:^(NSString *name, SNServiceSpecActionArgument *arg, BOOL *stop) {
+        if([arg.direction isEqualToString:@"in"])
+        {
+            *stop = YES;
+            hasInParam = YES;
+        }
+    }];
+    return hasInParam;
+}
+
+- (BOOL)hasOutParameters
+{
+    __block BOOL hasOutParam = NO;
+    [_argumentList enumerateKeysAndObjectsUsingBlock:^(NSString *name, SNServiceSpecActionArgument *arg, BOOL *stop) {
+        if([arg.direction isEqualToString:@"out"])
+        {
+            *stop = YES;
+            hasOutParam = YES;
+        }
+    }];
+    return hasOutParam;
+}
+
 - (NSString *)description
 {
     return [NSString stringWithFormat:@"Action: name=%@, argumentList=%@", _name, _argumentList];

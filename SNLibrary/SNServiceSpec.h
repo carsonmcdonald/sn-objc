@@ -22,6 +22,9 @@
 @property (strong, nonatomic) NSString *name;
 @property (strong, nonatomic) NSDictionary *argumentList;
 
+- (BOOL)hasInParameters;
+- (BOOL)hasOutParameters;
+
 @end
 
 @interface SNServiceSpec : SNResponse
